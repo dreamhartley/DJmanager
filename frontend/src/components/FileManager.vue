@@ -34,6 +34,7 @@ const loading = ref(false)
 const selectedFileIds = ref<Set<number>>(new Set())
 const selectedFolderPaths = ref<Set<string>>(new Set())
 const uploading = ref(false)
+const uploadProgress = ref('')
 
 const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
@@ -164,12 +165,17 @@ function handleFileClick(e: MouseEvent, fileId: number) {
 async function doUpload(filesToUpload: File[]) {
   if (filesToUpload.length === 0) return
   uploading.value = true
+  const total = filesToUpload.length
   try {
-    await uploadFiles(props.workId, filesToUpload, currentPath.value || undefined)
+    for (let i = 0; i < total; i++) {
+      uploadProgress.value = `(${i + 1}/${total})`
+      await uploadFiles(props.workId, [filesToUpload[i]], currentPath.value || undefined)
+    }
     await loadDirectory()
     emit('refresh')
   } finally {
     uploading.value = false
+    uploadProgress.value = ''
   }
 }
 
@@ -389,9 +395,9 @@ function canPreview(file: FileItem) {
             </div>
           </div>
           <!-- 上传按钮 -->
-          <label class="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded transition-colors cursor-pointer">
+          <label class="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded transition-colors" :class="uploading ? 'opacity-75 cursor-wait' : 'cursor-pointer'">
             <Upload class="w-4 h-4" />
-            {{ uploading ? '上传中...' : '上传文件' }}
+            {{ uploading ? `上传中... ${uploadProgress}` : '上传文件' }}
             <input type="file" multiple class="hidden" @change="handleUpload" :disabled="uploading" />
           </label>
         </div>
