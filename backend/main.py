@@ -10,6 +10,7 @@ from config import DATA_DIR, COVERS_DIR
 from database import init_db
 from routers.works import router as works_router
 from routers.files import router as files_router
+from routers.chunked_upload import router as chunked_upload_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.mount("/covers", StaticFiles(directory=str(COVERS_DIR)), name="covers")
 # 注册路由
 app.include_router(works_router)
 app.include_router(files_router)
+app.include_router(chunked_upload_router)
 
 
 @app.get("/api/health")

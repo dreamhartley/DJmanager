@@ -169,7 +169,12 @@ async function doUpload(filesToUpload: File[]) {
   try {
     for (let i = 0; i < total; i++) {
       uploadProgress.value = `(${i + 1}/${total})`
-      await uploadFiles(props.workId, [filesToUpload[i]], currentPath.value || undefined)
+      await uploadFiles(props.workId, [filesToUpload[i]], currentPath.value || undefined, (p) => {
+        // 分块上传时显示详细进度
+        if (p.chunkIndex && p.chunkTotal && p.chunkTotal > 1) {
+          uploadProgress.value = `(${i + 1}/${total}) 分块 ${p.chunkIndex}/${p.chunkTotal}`
+        }
+      })
       await loadDirectory() // 立即刷新列表显示新上传的文件
     }
   } finally {
