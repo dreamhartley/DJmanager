@@ -489,12 +489,20 @@ async def preview_file(file_id: int, db: AsyncSession = Depends(get_db)):
 
     elif ext == "text":
         try:
-            content = abs_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            try:
-                content = abs_path.read_text(encoding="gbk")
-            except Exception:
-                content = "[无法解码此文件]"
+            raw_data = abs_path.read_bytes()
+            # 尝试常见编码进行解码：UTF-8 (带/不带BOM), CP932 (日文Windows), GB18030 (中文Windows), UTF-16, EUC-JP
+            encodings = ["utf-8-sig", "cp932", "gb18030", "utf-16", "euc_jp"]
+            content = None
+            for enc in encodings:
+                try:
+                    content = raw_data.decode(enc)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if content is None:
+                content = raw_data.decode("utf-8", errors="replace")
+        except Exception as e:
+            content = f"[无法解码此文件]: {str(e)}"
         return {"filename": file_record.filename, "content": content, "type": "text"}
 
     else:
