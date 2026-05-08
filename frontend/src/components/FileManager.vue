@@ -170,12 +170,12 @@ async function doUpload(filesToUpload: File[]) {
     for (let i = 0; i < total; i++) {
       uploadProgress.value = `(${i + 1}/${total})`
       await uploadFiles(props.workId, [filesToUpload[i]], currentPath.value || undefined)
+      await loadDirectory() // 立即刷新列表显示新上传的文件
     }
-    await loadDirectory()
-    emit('refresh')
   } finally {
     uploading.value = false
     uploadProgress.value = ''
+    emit('refresh')
   }
 }
 
