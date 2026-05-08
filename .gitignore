@@ -1,0 +1,73 @@
+# ==========================================
+# DJmanager Git Ignore Configuration
+# ==========================================
+
+# --- Python / Backend ---
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Node / Frontend ---
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/local
+.npm
+*.log
+package-lock.json.log
+yarn-error.log
+
+# --- IDE / Editors ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# --- System Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Local Environment ---
+.env
+.env.local
+.env.*.local
+
+# --- Application Data ---
+# 忽略 data 目录下的所有内容
+data/**
+# 但不忽略目录本身，以便 Git 能够遍历它们
+!data/**/
+# 排除 .gitkeep 文件，保留目录结构
+!data/**/.gitkeep
