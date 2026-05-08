@@ -42,7 +42,7 @@ const coverUrl = getCoverUrl(props.work.cover_path)
       </h3>
       
       <!-- 标签区域 -->
-      <div class="flex flex-col gap-1.5 mt-auto">
+      <div class="flex flex-col gap-1.5">
         <div v-if="work.genres && work.genres.length > 0" class="flex flex-wrap gap-1">
           <span 
             v-for="(tag, index) in work.genres.slice(0, 5)" 
