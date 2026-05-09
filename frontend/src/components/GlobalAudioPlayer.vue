@@ -472,9 +472,10 @@ function getVolumeIcon() {
 .player-mini {
   position: fixed; bottom: 0; left: 0; right: 0;
   background: linear-gradient(180deg, #1e1e2e, #16162a);
-  color: #e0e0e0; display: flex; align-items: center; flex-wrap: wrap;
+  color: #e0e0e0; display: flex; align-items: center; flex-wrap: nowrap;
   box-shadow: 0 -2px 16px rgba(0,0,0,0.3); z-index: 9999;
   animation: slideUpMini 0.25s ease-out;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 @keyframes slideUpMini {
   from { transform: translateY(100%); }

@@ -10,14 +10,14 @@ const playerStore = usePlayerStore()
 // 当迷你播放器显示时，给外层容器添加底部间距，使主内容区的高度缩小
 const mainPaddingBottom = computed(() => {
   if (playerStore.isVisible && !playerStore.isExpanded) {
-    return '52px'
+    return 'calc(52px + env(safe-area-inset-bottom))'
   }
   return undefined
 })
 </script>
 
 <template>
-  <div class="h-screen overflow-hidden bg-gray-100 flex flex-col" :style="{ paddingBottom: mainPaddingBottom }">
+  <div class="h-dvh overflow-hidden bg-gray-100 flex flex-col" :style="{ paddingBottom: mainPaddingBottom }">
     <!-- 顶部导航栏 -->
     <header class="h-14 bg-blue-500 text-white flex items-center px-4 flex-shrink-0 z-40 shadow-sm">
       <div class="flex items-center gap-4">
