@@ -34,7 +34,7 @@ export interface FileItem {
   filename: string
   filepath: string
   file_size: number
-  file_type: 'audio' | 'video' | 'image' | 'text' | 'other'
+  file_type: 'audio' | 'video' | 'image' | 'text' | 'pdf' | 'other'
   created_at: string
 }
 

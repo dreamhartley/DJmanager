@@ -333,7 +333,7 @@ function canPlay(file: FileItem) {
 }
 
 function canPreview(file: FileItem) {
-  return file.file_type === 'image' || file.file_type === 'text'
+  return file.file_type === 'image' || file.file_type === 'text' || file.file_type === 'pdf'
 }
 </script>
 
@@ -528,7 +528,7 @@ function canPreview(file: FileItem) {
             <ImageIcon v-else class="w-4 h-4 text-gray-500" />
           </div>
           <div v-else class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
-            <FileText v-if="file.file_type === 'text'" class="w-4 h-4" />
+            <FileText v-if="file.file_type === 'text' || file.file_type === 'pdf'" class="w-4 h-4" />
             <FileIcon v-else class="w-4 h-4" />
           </div>
 

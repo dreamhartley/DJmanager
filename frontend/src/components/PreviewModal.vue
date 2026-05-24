@@ -61,6 +61,7 @@ const componentType = computed(() => {
       <div class="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex-1">
         <VideoPlayer v-if="componentType === 'video'" :src="streamUrl" :filename="file.filename" />
         <TextPreview v-else-if="componentType === 'text'" :src="previewUrl" :filename="file.filename" />
+        <iframe v-else-if="componentType === 'pdf'" :src="previewUrl" class="w-full h-[75vh] border-0 bg-white" />
         <div v-else class="flex items-center justify-center py-20 text-gray-500">
           不支持预览此文件类型
         </div>
