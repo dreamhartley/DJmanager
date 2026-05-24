@@ -487,6 +487,9 @@ async def preview_file(file_id: int, db: AsyncSession = Depends(get_db)):
         mime_type, _ = mimetypes.guess_type(file_record.filename)
         return StarletteFileResponse(path=str(abs_path), media_type=mime_type or "image/png")
 
+    elif ext == "pdf":
+        return StarletteFileResponse(path=str(abs_path), media_type="application/pdf")
+
     elif ext == "text":
         try:
             raw_data = abs_path.read_bytes()

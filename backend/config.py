@@ -23,8 +23,9 @@ AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a", ".o
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".avi", ".mov", ".flv", ".wmv"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".xml", ".csv", ".log", ".py", ".js", ".ts", ".html", ".css", ".yaml", ".yml", ".toml", ".ini", ".cfg"}
+PDF_EXTENSIONS = {".pdf"}
 PLAYABLE_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
-PREVIEWABLE_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS
+PREVIEWABLE_EXTENSIONS = IMAGE_EXTENSIONS | TEXT_EXTENSIONS | PDF_EXTENSIONS
 
 # 流媒体分块大小（1MB）
 STREAM_CHUNK_SIZE = 1024 * 1024

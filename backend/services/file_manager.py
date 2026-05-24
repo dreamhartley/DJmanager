@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from config import WORKS_DIR, COVERS_DIR, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS, TEXT_EXTENSIONS
+from config import WORKS_DIR, COVERS_DIR, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS, TEXT_EXTENSIONS, PDF_EXTENSIONS
 
 
 class FileManagerService:
@@ -29,6 +29,8 @@ class FileManagerService:
             return "image"
         elif ext in TEXT_EXTENSIONS:
             return "text"
+        elif ext in PDF_EXTENSIONS:
+            return "pdf"
         else:
             return "other"
 

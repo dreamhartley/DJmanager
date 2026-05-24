@@ -30,3 +30,14 @@ async def init_db():
     """初始化数据库表"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 迁移：将已有以 .pdf 结尾的 file_type 为 other 的记录更新为 pdf
+    async with async_session() as session:
+        from sqlalchemy import update
+        from models import File
+        await session.execute(
+            update(File)
+            .where(File.filename.ilike("%.pdf"), File.file_type == "other")
+            .values(file_type="pdf")
+        )
+        await session.commit()
