@@ -12,3 +12,26 @@
 .fade-leave-to {
   opacity: 0;
 }
+
+/* 模态框全局过渡 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+.modal-enter-active > div,
+.modal-leave-active > div {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-from > div {
+  transform: scale(0.96);
+  opacity: 0;
+}
+.modal-leave-to > div {
+  transform: scale(0.96);
+  opacity: 0;
+}
+

@@ -101,11 +101,6 @@ async function confirmDelete() {
       </button>
     </div>
 
-    <!-- 错误提示 -->
-    <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex justify-between items-center">
-      <span>{{ error }}</span>
-      <button class="text-red-400 hover:text-red-600" @click="error = ''">关闭</button>
-    </div>
 
     <!-- 加载状态 -->
     <div v-if="store.loading" class="flex items-center justify-center py-20">
@@ -133,21 +128,28 @@ async function confirmDelete() {
     </div>
 
     <!-- 添加对话框 -->
-    <AddWorkDialog
-      v-if="showAddDialog"
-      @submit="handleAddWork"
-      @close="showAddDialog = false; error = ''"
-    />
+    <Teleport to="body">
+      <Transition name="modal">
+        <AddWorkDialog
+          v-if="showAddDialog"
+          :loading="adding"
+          :error="error"
+          @submit="handleAddWork"
+          @close="showAddDialog = false; error = ''"
+          @clear-error="error = ''"
+        />
+      </Transition>
+    </Teleport>
 
     <!-- 删除确认模态框 -->
     <Teleport to="body">
-      <Transition name="delete-modal">
+      <Transition name="modal">
         <div
           v-if="showDeleteModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-md"
           @click.self="closeDeleteModal"
         >
-          <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md mx-4 shadow-2xl">
+          <div class="bg-slate-900/75 backdrop-blur-xl border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] ring-1 ring-white/5">
             <div class="p-6">
               <!-- 警告图标与标题 -->
               <div class="flex items-center gap-3 mb-4">
@@ -174,13 +176,13 @@ async function confirmDelete() {
                   v-model="deleteConfirmInput"
                   type="text"
                   :placeholder="deleteTargetRjCode"
-                  class="w-full px-3 py-2 bg-gray-800 border rounded-lg text-gray-100 placeholder-gray-600 focus:outline-none transition-colors"
+                  class="w-full px-3 py-2 bg-slate-950/50 border rounded-lg text-gray-100 placeholder-slate-600 focus:outline-none transition-all"
                   :class="[
                     deleteConfirmInput.trim() && !isDeleteConfirmMatch
-                      ? 'border-red-500/50 focus:border-red-500 focus:ring-1 focus:ring-red-500'
+                      ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
                       : isDeleteConfirmMatch
-                        ? 'border-green-500/50 focus:border-green-500 focus:ring-1 focus:ring-green-500'
-                        : 'border-gray-700 focus:border-gray-500 focus:ring-1 focus:ring-gray-500'
+                        ? 'border-green-500/50 focus:border-green-500 focus:ring-2 focus:ring-green-500/20'
+                        : 'border-slate-700/50 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20'
                   ]"
                   @keyup.enter="confirmDelete"
                 />
@@ -218,24 +220,4 @@ async function confirmDelete() {
 </template>
 
 <style scoped>
-.delete-modal-enter-active,
-.delete-modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-.delete-modal-enter-active > div,
-.delete-modal-leave-active > div {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-.delete-modal-enter-from,
-.delete-modal-leave-to {
-  opacity: 0;
-}
-.delete-modal-enter-from > div {
-  transform: scale(0.95);
-  opacity: 0;
-}
-.delete-modal-leave-to > div {
-  transform: scale(0.95);
-  opacity: 0;
-}
 </style>
