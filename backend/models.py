@@ -37,6 +37,14 @@ class Work(Base):
         return json.loads(self.genres) if self.genres else []
 
 
+class Setting(Base):
+    """通用配置（key/value）存储，用于 WebDAV 等运行时可改的配置"""
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
 class File(Base):
     """文件模型"""
     __tablename__ = "files"

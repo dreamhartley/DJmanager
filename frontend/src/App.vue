@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterView } from 'vue-router'
-import { Menu } from 'lucide-vue-next'
+import { Settings } from 'lucide-vue-next'
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.vue'
 import { usePlayerStore } from './stores/player'
 
@@ -21,9 +21,9 @@ const mainPaddingBottom = computed(() => {
     <!-- 顶部导航栏 -->
     <header class="h-14 bg-blue-500 text-white flex items-center px-4 flex-shrink-0 z-40 shadow-sm">
       <div class="flex items-center gap-4">
-        <button class="p-1 hover:bg-blue-600 rounded">
-          <Menu class="w-6 h-6" />
-        </button>
+        <router-link to="/settings" class="p-1 hover:bg-blue-600 rounded transition-colors" title="存储设置">
+          <Settings class="w-6 h-6" />
+        </router-link>
         <router-link to="/" class="text-xl font-medium hover:text-blue-100 transition-colors cursor-pointer">
           DJmanager
         </router-link>

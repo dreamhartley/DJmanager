@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Work, WorkListItem, FileItem, DirectoryListing, DirEntry, FileUploadResponse } from '../types'
+import type { Work, WorkListItem, FileItem, DirectoryListing, DirEntry, FileUploadResponse, StorageSettings, BrowseEntry, TestConnectionResult, ScanResult } from '../types'
 
 const api = axios.create({
   baseURL: '/api',
@@ -25,6 +25,11 @@ export async function getWork(rjCode: string): Promise<Work> {
 
 export async function deleteWork(id: number): Promise<void> {
   await api.delete(`/works/${id}`)
+}
+
+export async function scanWorkFiles(workId: number): Promise<ScanResult> {
+  const { data } = await api.post(`/works/${workId}/scan`)
+  return data
 }
 
 // ========== 目录 API ==========
@@ -217,4 +222,29 @@ export function getStreamUrl(fileId: number): string {
 
 export function getPreviewUrl(fileId: number): string {
   return `/api/files/${fileId}/preview`
+}
+
+// ========== 存储设置 API ==========
+
+export async function getStorageSettings(): Promise<StorageSettings> {
+  const { data } = await api.get('/storage/settings')
+  return data
+}
+
+export async function saveStorageSettings(settings: StorageSettings): Promise<StorageSettings> {
+  const { data } = await api.put('/storage/settings', settings)
+  return data
+}
+
+export async function testStorageConnection(
+  payload: { url: string; username: string; password: string; base_path: string },
+): Promise<TestConnectionResult> {
+  const { data } = await api.post('/storage/test', payload)
+  return data
+}
+
+export async function browseStorageFolders(path?: string): Promise<BrowseEntry[]> {
+  const params = path ? { path } : {}
+  const { data } = await api.get('/storage/browse', { params })
+  return data
 }

@@ -81,3 +81,31 @@ export function isFile(entry: DirEntry): entry is FileItem {
 export function isFolder(entry: DirEntry): entry is FolderItem {
   return (entry as any).type === 'folder'
 }
+
+// ========== 存储设置相关 ==========
+
+export interface StorageSettings {
+  webdav_enabled: boolean
+  webdav_url: string
+  webdav_username: string
+  /** 密码读取时返回 "***"（已设置）或 ""（未设置）；写入时空/"***"表示保持原值 */
+  webdav_password: string
+  webdav_base_path: string
+  /** 新作品默认落点 "local" | "webdav" */
+  default_target: string
+}
+
+export interface BrowseEntry {
+  name: string
+  path: string
+}
+
+export interface TestConnectionResult {
+  ok: boolean
+  message: string
+}
+
+export interface ScanResult {
+  new_count: number
+  total: number
+}

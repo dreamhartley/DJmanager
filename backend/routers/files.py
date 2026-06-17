@@ -2,15 +2,15 @@
 
 import os
 import mimetypes
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile, Query
-from fastapi.responses import StreamingResponse, FileResponse as StarletteFileResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile, Query, Request
+from fastapi.responses import FileResponse as StarletteFileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import WORKS_DIR, STREAM_CHUNK_SIZE, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS, TEXT_EXTENSIONS
+from config import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from database import get_db
+from deps import get_storage
 from models import Work, File
 from schemas import (
     FileResponse, FileRenameRequest, FileCopyRequest,
@@ -18,7 +18,7 @@ from schemas import (
     DirEntry, DirectoryListing,
     CreateFolderRequest, RenameFolderRequest,
 )
-from services.file_manager import file_manager
+from services.storage import OverlayStorage, get_file_type
 
 router = APIRouter(prefix="/api", tags=["文件管理"])
 
@@ -71,6 +71,7 @@ async def list_directory(
     work_id: int,
     path: str = Query(default="", description="相对于作品根目录的子路径"),
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """获取目录内容（文件 + 文件夹）"""
     work = await db.get(Work, work_id)
@@ -80,11 +81,13 @@ async def list_directory(
     # 规范化 path（统一正斜杠，去除首尾/）
     subpath = _normalize_path(path)
 
-    # 获取目录中的文件和文件夹
-    file_paths, folder_paths = file_manager.list_directory(work.rj_code, subpath)
+    # 获取目录中的文件和文件夹（新签名：files=[(relpath,size)], folders=[relpath]）
+    files_with_size, folder_paths = await storage.list_directory(work.rj_code, subpath)
 
     # 查找文件对应的 DB 记录
     # 构建反斜杠版本用于匹配旧 DB 记录（Windows 历史数据）
+    file_paths = [fp for fp, _ in files_with_size]
+    size_map = dict(files_with_size)
     file_paths_backslash = [fp.replace("/", "\\") for fp in file_paths]
     all_lookup_paths = file_paths + file_paths_backslash
     file_records_map = {}
@@ -128,8 +131,8 @@ async def list_directory(
                 type="file",
                 filename=os.path.basename(fp),
                 filepath=fp,
-                file_size=0,
-                file_type=file_manager.get_file_type(os.path.splitext(fp)[1]),
+                file_size=size_map.get(fp, 0),
+                file_type=get_file_type(os.path.splitext(fp)[1]),
             ))
 
     breadcrumbs = _build_breadcrumbs(subpath)
@@ -149,6 +152,7 @@ async def upload_files(
     files: list[UploadFile] = FastAPIFile(...),
     path: str = Query(default="", description="目标子目录（相对于作品根目录）"),
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """上传文件到作品（可指定子目录）"""
     work = await db.get(Work, work_id)
@@ -162,11 +166,11 @@ async def upload_files(
     for upload_file in files:
         try:
             content = await upload_file.read()
-            relative_path, file_size = file_manager.save_uploaded_file(
+            relative_path, file_size = await storage.save_file(
                 work.rj_code, upload_file.filename, content, subfolder
             )
             ext = os.path.splitext(upload_file.filename)[1]
-            file_type = file_manager.get_file_type(ext)
+            file_type = get_file_type(ext)
 
             file_record = File(
                 work_id=work_id,
@@ -193,6 +197,7 @@ async def create_folder(
     data: CreateFolderRequest,
     path: str = Query(default="", description="父目录路径（相对于作品根目录）"),
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """创建文件夹"""
     work = await db.get(Work, work_id)
@@ -201,7 +206,7 @@ async def create_folder(
 
     subpath = _normalize_path(path)
     try:
-        folder_rel_path = file_manager.create_folder(work.rj_code, subpath, data.folder_name)
+        folder_rel_path = await storage.create_folder(work.rj_code, subpath, data.folder_name)
         rel_to_work = _get_work_dir_relative_path(work.rj_code, folder_rel_path)
         return {"type": "folder", "name": data.folder_name, "path": rel_to_work}
     except FileExistsError as e:
@@ -213,6 +218,7 @@ async def delete_folder(
     work_id: int,
     path: str = Query(..., description="文件夹相对于作品根目录的路径"),
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """删除文件夹（递归删除，同时删除其中的文件 DB 记录）"""
     work = await db.get(Work, work_id)
@@ -235,7 +241,7 @@ async def delete_folder(
     files_in_folder = result.scalars().all()
 
     try:
-        file_manager.delete_folder(work.rj_code, folder_rel)
+        await storage.delete_folder(work.rj_code, folder_rel)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -251,6 +257,7 @@ async def rename_folder(
     work_id: int,
     data: RenameFolderRequest,
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """重命名文件夹，同时更新其中所有文件的 DB filepath"""
     work = await db.get(Work, work_id)
@@ -262,7 +269,7 @@ async def rename_folder(
         raise HTTPException(status_code=400, detail="不允许重命名作品根目录")
 
     try:
-        new_full_path = file_manager.rename_folder(work.rj_code, old_rel, data.new_name)
+        new_full_path = await storage.rename_folder(work.rj_code, old_rel, data.new_name)
         rel_to_work = _get_work_dir_relative_path(work.rj_code, new_full_path)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -297,21 +304,29 @@ async def rename_folder(
 # ========== 删除单个文件 ==========
 
 @router.delete("/files/{file_id}", status_code=204)
-async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
     """删除单个文件"""
     file_record = await db.get(File, file_id)
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
 
     work = await db.get(Work, file_record.work_id)
-    file_manager.delete_file(work.rj_code, file_record.filepath)
+    await storage.delete_file(work.rj_code, file_record.filepath)
     await db.delete(file_record)
 
 
 # ========== 批量删除文件 ==========
 
 @router.post("/files/batch-delete", status_code=204)
-async def batch_delete_files(data: BatchDeleteRequest, db: AsyncSession = Depends(get_db)):
+async def batch_delete_files(
+    data: BatchDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
     """批量删除文件"""
     result = await db.execute(select(File).where(File.id.in_(data.file_ids)))
     files = result.scalars().all()
@@ -325,7 +340,7 @@ async def batch_delete_files(data: BatchDeleteRequest, db: AsyncSession = Depend
         if f.work_id not in work_cache:
             work_cache[f.work_id] = await db.get(Work, f.work_id)
         work = work_cache[f.work_id]
-        file_manager.delete_file(work.rj_code, f.filepath)
+        await storage.delete_file(work.rj_code, f.filepath)
         await db.delete(f)
 
 
@@ -336,6 +351,7 @@ async def rename_file(
     file_id: int,
     data: FileRenameRequest,
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """重命名文件"""
     file_record = await db.get(File, file_id)
@@ -344,7 +360,7 @@ async def rename_file(
 
     work = await db.get(Work, file_record.work_id)
     try:
-        new_relative, new_name = file_manager.rename_file(
+        new_relative, new_name = await storage.rename_file(
             work.rj_code, file_record.filepath, data.new_name
         )
     except FileNotFoundError:
@@ -355,7 +371,7 @@ async def rename_file(
     file_record.filepath = new_relative
     file_record.filename = new_name
     ext = os.path.splitext(new_name)[1]
-    file_record.file_type = file_manager.get_file_type(ext)
+    file_record.file_type = get_file_type(ext)
     await db.flush()
     await db.refresh(file_record)
     return _file_to_response(file_record)
@@ -364,7 +380,11 @@ async def rename_file(
 # ========== 复制文件 ==========
 
 @router.post("/files/copy", response_model=list[FileResponse])
-async def copy_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
+async def copy_files(
+    data: FileCopyRequest,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
     """复制文件到目标作品"""
     target_work = await db.get(Work, data.target_work_id)
     if not target_work:
@@ -378,8 +398,8 @@ async def copy_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
     new_files = []
     for sf in source_files:
         source_work = await db.get(Work, sf.work_id)
-        new_relative, new_name, new_size = file_manager.copy_file_to_work(
-            source_work.rj_code, sf.filepath, target_work.rj_code
+        new_relative, new_name, new_size = await storage.copy_within(
+            sf.filepath, target_work.rj_code
         )
         ext = os.path.splitext(new_name)[1]
         new_file = File(
@@ -387,7 +407,7 @@ async def copy_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
             filename=new_name,
             filepath=new_relative,
             file_size=new_size,
-            file_type=file_manager.get_file_type(ext),
+            file_type=get_file_type(ext),
         )
         db.add(new_file)
         await db.flush()
@@ -400,7 +420,11 @@ async def copy_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
 # ========== 移动文件 ==========
 
 @router.post("/files/move", response_model=list[FileResponse])
-async def move_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
+async def move_files(
+    data: FileCopyRequest,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
     """移动文件到目标作品"""
     target_work = await db.get(Work, data.target_work_id)
     if not target_work:
@@ -414,8 +438,8 @@ async def move_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
     new_files = []
     for sf in source_files:
         source_work = await db.get(Work, sf.work_id)
-        new_relative, new_name, new_size = file_manager.move_file_to_work(
-            source_work.rj_code, sf.filepath, target_work.rj_code
+        new_relative, new_name, new_size = await storage.move_within(
+            sf.filepath, target_work.rj_code
         )
         ext = os.path.splitext(new_name)[1]
         new_file = File(
@@ -423,7 +447,7 @@ async def move_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
             filename=new_name,
             filepath=new_relative,
             file_size=new_size,
-            file_type=file_manager.get_file_type(ext),
+            file_type=get_file_type(ext),
         )
         db.add(new_file)
         await db.delete(sf)
@@ -437,22 +461,24 @@ async def move_files(data: FileCopyRequest, db: AsyncSession = Depends(get_db)):
 # ========== 流媒体 & 预览 ==========
 
 @router.get("/files/{file_id}/stream")
-async def stream_file(file_id: int, db: AsyncSession = Depends(get_db)):
+async def stream_file(
+    file_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
     """流媒体播放（支持 Range 请求，用于音视频拖拽进度条）"""
     file_record = await db.get(File, file_id)
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
 
     work = await db.get(Work, file_record.work_id)
-    abs_path = file_manager.get_absolute_path(work.rj_code, file_record.filepath)
 
-    if not abs_path.exists():
+    if not await storage.exists(work.rj_code, file_record.filepath):
         raise HTTPException(status_code=404, detail="物理文件不存在")
 
-    file_size = abs_path.stat().st_size
-    ext = file_record.file_type
-
-    if ext not in ("audio", "video"):
+    file_type = file_record.file_type
+    if file_type not in ("audio", "video"):
         raise HTTPException(status_code=400, detail="该文件不支持流媒体播放")
 
     # 确定 MIME 类型
@@ -460,39 +486,45 @@ async def stream_file(file_id: int, db: AsyncSession = Depends(get_db)):
     if not mime_type:
         mime_type = "application/octet-stream"
 
-    # 使用 Starlette 的 FileResponse 支持 Range 请求
-    return StarletteFileResponse(
-        path=str(abs_path),
-        media_type=mime_type,
-        filename=file_record.filename,
+    range_header = request.headers.get("range")
+    return await storage.open_stream(
+        work.rj_code, file_record.filepath, range_header,
+        file_record.filename, mime_type,
     )
 
 
 @router.get("/files/{file_id}/preview")
-async def preview_file(file_id: int, db: AsyncSession = Depends(get_db)):
-    """文件预览（图片/文本）"""
+async def preview_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
+):
+    """文件预览（图片/pdf/文本）"""
     file_record = await db.get(File, file_id)
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
 
     work = await db.get(Work, file_record.work_id)
-    abs_path = file_manager.get_absolute_path(work.rj_code, file_record.filepath)
 
-    if not abs_path.exists():
+    if not await storage.exists(work.rj_code, file_record.filepath):
         raise HTTPException(status_code=404, detail="物理文件不存在")
 
-    ext = file_record.file_type
+    file_type = file_record.file_type
 
-    if ext == "image":
+    if file_type in ("image", "pdf"):
         mime_type, _ = mimetypes.guess_type(file_record.filename)
-        return StarletteFileResponse(path=str(abs_path), media_type=mime_type or "image/png")
+        if file_type == "pdf":
+            mime_type = mime_type or "application/pdf"
+        else:
+            mime_type = mime_type or "image/png"
+        return await storage.open_stream(
+            work.rj_code, file_record.filepath, None,
+            file_record.filename, mime_type,
+        )
 
-    elif ext == "pdf":
-        return StarletteFileResponse(path=str(abs_path), media_type="application/pdf")
-
-    elif ext == "text":
+    elif file_type == "text":
         try:
-            raw_data = abs_path.read_bytes()
+            raw_data = await storage.read_bytes(work.rj_code, file_record.filepath)
             # 尝试常见编码进行解码：UTF-8 (带/不带BOM), CP932 (日文Windows), GB18030 (中文Windows), UTF-16, EUC-JP
             encodings = ["utf-8-sig", "cp932", "gb18030", "utf-16", "euc_jp"]
             content = None

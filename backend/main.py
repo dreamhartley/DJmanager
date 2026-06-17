@@ -8,16 +8,20 @@ from fastapi.staticfiles import StaticFiles
 
 from config import DATA_DIR, COVERS_DIR
 from database import init_db
+from services.storage import storage_manager
 from routers.works import router as works_router
 from routers.files import router as files_router
 from routers.chunked_upload import router as chunked_upload_router
+from routers.settings import router as settings_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期：启动时初始化数据库"""
+    """应用生命周期：启动时初始化数据库与存储后端"""
     await init_db()
+    await storage_manager.init()
     yield
+    await storage_manager.aclose()
 
 
 app = FastAPI(
@@ -43,6 +47,7 @@ app.mount("/covers", StaticFiles(directory=str(COVERS_DIR)), name="covers")
 app.include_router(works_router)
 app.include_router(files_router)
 app.include_router(chunked_upload_router)
+app.include_router(settings_router)
 
 
 @app.get("/api/health")

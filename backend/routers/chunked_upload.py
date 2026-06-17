@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastA
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import WORKS_DIR, DATA_DIR
+from config import DATA_DIR
 from database import get_db
+from deps import get_storage
 from models import Work, File
 from schemas import FileResponse, FileUploadResponse
-from services.file_manager import file_manager
+from services.storage import OverlayStorage, get_file_type
 
 router = APIRouter(prefix="/api", tags=["分块上传"])
 
@@ -126,6 +127,7 @@ async def upload_chunk(
 async def complete_chunked_upload(
     upload_id: str = Query(..., description="上传会话 ID"),
     db: AsyncSession = Depends(get_db),
+    storage: OverlayStorage = Depends(get_storage),
 ):
     """合并所有分块为完整文件"""
     chunk_dir = CHUNKS_DIR / upload_id
@@ -146,7 +148,7 @@ async def complete_chunked_upload(
     rj_code = meta["rj_code"]
     filename = meta["filename"]
     total_chunks = int(meta["total_chunks"])
-    subfolder = meta.get("path", "")
+    subfolder = _normalize_path(meta.get("path", ""))
 
     # 验证作品是否存在
     work = await db.get(Work, work_id)
@@ -165,35 +167,30 @@ async def complete_chunked_upload(
             detail=f"分块不完整：期望 {total_chunks} 个，实际 {len(chunk_files)} 个",
         )
 
-    # 合并分块到目标路径
-    target_dir = WORKS_DIR / rj_code / subfolder
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    # 处理重名
-    base, ext = os.path.splitext(filename)
-    target_path = target_dir / filename
-    counter = 1
-    while target_path.exists():
-        target_path = target_dir / f"{base}_{counter}{ext}"
-        counter += 1
+    # 先合并到本地临时文件（合并大文件需流式写，避免占用过多内存）
+    tmp_path = chunk_dir / f"_merged_{filename}"
+    try:
+        with open(tmp_path, "wb") as f:
+            for chunk_file in chunk_files:
+                f.write(chunk_file.read_bytes())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"合并分块失败: {e}")
 
     uploaded = []
     errors = []
 
     try:
-        # 顺序写入所有分块
-        with open(target_path, "wb") as f:
-            for chunk_file in chunk_files:
-                f.write(chunk_file.read_bytes())
-
-        file_size = target_path.stat().st_size
-        relative_path = target_path.relative_to(WORKS_DIR).as_posix()
-        file_type = file_manager.get_file_type(ext)
+        # 通过 storage 将临时文件落到目标后端（overlay 决定本地/WebDAV）
+        relative_path, file_size = await storage.save_file_from_path(
+            rj_code, filename, str(tmp_path), subfolder
+        )
+        ext = os.path.splitext(filename)[1]
+        file_type = get_file_type(ext)
 
         # 创建数据库记录
         file_record = File(
             work_id=work_id,
-            filename=target_path.name,
+            filename=os.path.basename(relative_path),
             filepath=relative_path,
             file_size=file_size,
             file_type=file_type,
@@ -205,11 +202,8 @@ async def complete_chunked_upload(
 
     except Exception as e:
         errors.append(f"{filename}: {e}")
-        # 如果合并失败，清理已创建的目标文件
-        if target_path.exists():
-            target_path.unlink()
     finally:
-        # 清理分块临时文件
+        # 清理分块临时文件（含合并产物）
         _cleanup_chunks(chunk_dir)
 
     return FileUploadResponse(files=uploaded, errors=errors)

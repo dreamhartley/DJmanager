@@ -9,7 +9,7 @@ import {
   getStreamUrl, getPreviewUrl,
 } from '../api'
 import { usePlayerStore } from '../stores/player'
-import { Play, Pause, Image as ImageIcon, FileText, File as FileIcon, MoreHorizontal, Trash2, Edit2, Copy, Upload, Folder, FolderPlus, ChevronRight, Home, ArrowLeft } from 'lucide-vue-next'
+import { Play, Pause, Image as ImageIcon, FileText, File as FileIcon, MoreHorizontal, Trash2, Edit2, Copy, Upload, Folder, FolderPlus, ChevronRight, Home, ArrowLeft, RefreshCw } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +26,7 @@ const emit = defineEmits<{
   preview: [file: FileItem]
   audioListUpdate: [audioFiles: FileItem[]]
   back: []
+  scan: []
 }>()
 
 // ========== 状态 ==========
@@ -378,6 +379,15 @@ function canPreview(file: FileItem) {
           >
             <FolderPlus class="w-4 h-4" />
             新建文件夹
+          </button>
+          <!-- 重新扫描文件（注册存储中未入库的文件） -->
+          <button
+            class="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 rounded transition-colors"
+            title="扫描作品目录，将未注册到数据库的文件补登记"
+            @click="emit('scan')"
+          >
+            <RefreshCw class="w-4 h-4" />
+            重新扫描
           </button>
           <!-- 批量删除 -->
           <button

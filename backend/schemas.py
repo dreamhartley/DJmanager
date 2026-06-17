@@ -121,3 +121,30 @@ class RenameFolderRequest(BaseModel):
     """重命名文件夹请求"""
     current_path: str = Field(..., min_length=1, description="文件夹相对于作品根目录的路径")
     new_name: str = Field(..., min_length=1, max_length=255)
+
+
+# ========== 存储设置相关 ==========
+
+class StorageSettings(BaseModel):
+    """存储配置（WebDAV 等）"""
+    webdav_enabled: bool = False
+    webdav_url: str = ""
+    webdav_username: str = ""
+    # 密码：读取时返回 "***"（已设置）或 ""（未设置）；写入时空/ "***" 表示保持原值
+    webdav_password: str = ""
+    webdav_base_path: str = ""
+    default_target: str = "webdav"  # "local" | "webdav"
+
+
+class BrowseEntry(BaseModel):
+    """WebDAV 目录浏览条目"""
+    name: str
+    path: str
+
+
+class TestConnectionRequest(BaseModel):
+    """测试连接请求（使用表单中的临时凭据，不持久化）"""
+    url: str
+    username: str = ""
+    password: str = ""
+    base_path: str = ""

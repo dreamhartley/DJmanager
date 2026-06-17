@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getWork, listWorks } from '../api'
+import { getWork, listWorks, scanWorkFiles } from '../api'
 import { useWorksStore } from '../stores/works'
 import { usePlayerStore } from '../stores/player'
 import type { Work, FileItem, WorkListItem } from '../types'
 import { getCoverUrl } from '../types'
 import FileManager from '../components/FileManager.vue'
 import PreviewModal from '../components/PreviewModal.vue'
-import { 
+import {
   ChevronLeft, ExternalLink
 } from 'lucide-vue-next'
 
@@ -25,6 +25,8 @@ const allWorks = ref<WorkListItem[]>([])
 const loading = ref(true)
 const previewingFile = ref<FileItem | null>(null)
 const fileManagerKey = ref(0)
+const scanning = ref(false)
+const scanMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 // 当前文件夹中的音频文件列表（由 FileManager 提供）
 const currentAudioFiles = ref<FileItem[]>([])
@@ -77,6 +79,27 @@ async function handleRefresh() {
     allWorks.value = aw
   } catch {
     // 静默忽略刷新失败
+  }
+}
+
+async function handleScan() {
+  if (!work.value || scanning.value) return
+  scanning.value = true
+  scanMessage.value = null
+  try {
+    const result = await scanWorkFiles(work.value.id)
+    if (result.new_count > 0) {
+      scanMessage.value = { type: 'success', text: `已注册 ${result.new_count} 个新文件，当前共 ${result.total} 个` }
+    } else {
+      scanMessage.value = { type: 'success', text: `没有新文件需要注册，当前共 ${result.total} 个` }
+    }
+    // 刷新数据 + 强制 FileManager 重新加载目录
+    await handleRefresh()
+    fileManagerKey.value++
+  } catch (e: any) {
+    scanMessage.value = { type: 'error', text: `扫描失败：${e.message || e}` }
+  } finally {
+    scanning.value = false
   }
 }
 
@@ -166,6 +189,13 @@ function handleBack() {
           </div>
         </div>
 
+        <!-- 扫描结果提示 -->
+        <div v-if="scanMessage" class="mt-4 p-3 rounded-lg flex items-center gap-2 text-sm"
+          :class="scanMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'">
+          <span class="flex-1">{{ scanMessage.text }}</span>
+          <button class="text-current opacity-60 hover:opacity-100" @click="scanMessage = null">✕</button>
+        </div>
+
         <!-- 文件管理区 -->
         <div class="mt-8 border border-gray-200 rounded-lg bg-white shadow-sm">
           <FileManager
@@ -177,6 +207,7 @@ function handleBack() {
             @preview="handlePreview"
             @audio-list-update="handleAudioListUpdate"
             @back="handleBack"
+            @scan="handleScan"
           />
         </div>
       </div>
