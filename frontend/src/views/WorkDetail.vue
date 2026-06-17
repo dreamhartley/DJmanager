@@ -79,6 +79,10 @@ async function handleRefresh() {
     // 静默忽略刷新失败
   }
 }
+
+function handleBack() {
+  router.push('/')
+}
 </script>
 
 <template>
@@ -172,6 +176,7 @@ async function handleRefresh() {
             @play="handlePlay"
             @preview="handlePreview"
             @audio-list-update="handleAudioListUpdate"
+            @back="handleBack"
           />
         </div>
       </div>

@@ -9,7 +9,7 @@ import {
   getStreamUrl, getPreviewUrl,
 } from '../api'
 import { usePlayerStore } from '../stores/player'
-import { Play, Pause, Image as ImageIcon, FileText, File as FileIcon, MoreHorizontal, Trash2, Edit2, Copy, Upload, Folder, FolderPlus, ChevronRight, Home } from 'lucide-vue-next'
+import { Play, Pause, Image as ImageIcon, FileText, File as FileIcon, MoreHorizontal, Trash2, Edit2, Copy, Upload, Folder, FolderPlus, ChevronRight, Home, ArrowLeft } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +25,7 @@ const emit = defineEmits<{
   play: [file: FileItem]
   preview: [file: FileItem]
   audioListUpdate: [audioFiles: FileItem[]]
+  back: []
 }>()
 
 // ========== 状态 ==========
@@ -357,7 +358,18 @@ function canPreview(file: FileItem) {
 
     <!-- 工具栏 -->
     <div class="p-4 border-b border-gray-200 bg-white">
-      <div class="flex flex-col sm:flex-row gap-3 sm:items-center justify-end">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <!-- 左侧：返回按钮 -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="flex items-center justify-center w-9 h-9 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+            title="返回"
+            @click="emit('back')"
+          >
+            <ArrowLeft class="w-4 h-4" />
+          </button>
+        </div>
+        <!-- 右侧：文件操作 -->
         <div class="flex flex-wrap items-center gap-2">
           <!-- 新建文件夹 -->
           <button

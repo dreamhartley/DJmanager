@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useWorksStore } from '../stores/works'
 import { addWork, deleteWork } from '../api'
 import CoverCard from '../components/CoverCard.vue'
 import AddWorkDialog from '../components/AddWorkDialog.vue'
-import { Plus, Flame, Trash2, AlertTriangle } from 'lucide-vue-next'
+import { Plus, Flame, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 const store = useWorksStore()
 const showAddDialog = ref(false)
@@ -24,9 +24,99 @@ const isDeleteConfirmMatch = computed(() => {
   return deleteConfirmInput.value.trim().toUpperCase() === deleteTargetRjCode.value.toUpperCase()
 })
 
+// ========== 响应式分页 ==========
+// 移动端：< 768px => 2 列 × 4 行 = 8 个；PC：≥ 768px => 5 列 × 2 行 = 10 个
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false)
+const perPage = computed(() => (isMobile.value ? 8 : 10))
+
+function handleResize() {
+  isMobile.value = window.innerWidth < 768
+}
+
 onMounted(() => {
+  window.addEventListener('resize', handleResize)
   store.fetchWorks()
+  // 恢复主界面分页 / 滚动状态
+  nextTick(() => {
+    restoreScrollTop()
+  })
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+const totalPages = computed(() => {
+  if (store.works.length === 0) return 1
+  return Math.ceil(store.works.length / perPage.value)
+})
+
+// 当每页数量变化或作品数变化时，把当前页码约束到有效范围
+watch([perPage, totalPages], () => {
+  if (store.homePage > totalPages.value) {
+    store.homePage = totalPages.value
+  } else if (store.homePage < 1) {
+    store.homePage = 1
+  }
+})
+
+const pagedWorks = computed(() => {
+  const start = (store.homePage - 1) * perPage.value
+  return store.works.slice(start, start + perPage.value)
+})
+
+// 翻页按钮中展示的页码列表（最多 5 个，当前页居中，超出用省略号）
+const displayedPages = computed(() => {
+  const current = store.homePage
+  const total = totalPages.value
+  const max = 5
+  if (total <= max) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  let start = Math.max(1, current - Math.floor(max / 2))
+  let end = start + max - 1
+  if (end > total) {
+    end = total
+    start = end - max + 1
+  }
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+})
+
+function goToPage(page: number) {
+  if (page < 1 || page > totalPages.value || page === store.homePage) return
+  saveScrollTop()
+  store.homePage = page
+  nextTick(() => {
+    // 翻页后回到顶部
+    const main = document.querySelector('main')
+    if (main) main.scrollTop = 0
+  })
+}
+
+function prevPage() {
+  goToPage(store.homePage - 1)
+}
+
+function nextPage() {
+  goToPage(store.homePage + 1)
+}
+
+// ========== 滚动状态保存 / 恢复 ==========
+function getMainScrollTop(): number {
+  const main = document.querySelector('main')
+  return main ? main.scrollTop : 0
+}
+
+function saveScrollTop() {
+  store.homeScrollTop = getMainScrollTop()
+}
+
+function restoreScrollTop() {
+  const main = document.querySelector('main')
+  if (main && store.homeScrollTop > 0) {
+    main.scrollTop = store.homeScrollTop
+  }
+}
 
 async function handleAddWork(rjCode: string) {
   adding.value = true
@@ -118,13 +208,57 @@ async function confirmDelete() {
     </div>
 
     <!-- 封面网格 -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+    <div
+      v-else
+      class="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6"
+      @click.capture="saveScrollTop"
+    >
       <CoverCard
-        v-for="work in store.works"
+        v-for="work in pagedWorks"
         :key="work.id"
         :work="work"
         @delete="handleDeleteWork"
       />
+    </div>
+
+    <!-- 翻页控件 -->
+    <div v-if="!store.loading && store.works.length > 0 && totalPages > 1" class="flex items-center justify-center gap-1 mt-8">
+      <!-- 上一页 -->
+      <button
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-sm transition-colors"
+        :class="store.homePage === 1
+          ? 'text-gray-300 cursor-not-allowed'
+          : 'text-gray-600 hover:bg-gray-200'"
+        :disabled="store.homePage === 1"
+        @click="prevPage"
+      >
+        <ChevronLeft class="w-5 h-5" />
+      </button>
+
+      <!-- 页码 -->
+      <button
+        v-for="p in displayedPages"
+        :key="p"
+        class="min-w-[36px] h-9 px-2 rounded-lg text-sm font-medium transition-colors"
+        :class="p === store.homePage
+          ? 'bg-blue-500 text-white shadow-sm'
+          : 'text-gray-600 hover:bg-gray-200'"
+        @click="goToPage(p)"
+      >
+        {{ p }}
+      </button>
+
+      <!-- 下一页 -->
+      <button
+        class="flex items-center justify-center w-9 h-9 rounded-lg text-sm transition-colors"
+        :class="store.homePage === totalPages
+          ? 'text-gray-300 cursor-not-allowed'
+          : 'text-gray-600 hover:bg-gray-200'"
+        :disabled="store.homePage === totalPages"
+        @click="nextPage"
+      >
+        <ChevronRight class="w-5 h-5" />
+      </button>
     </div>
 
     <!-- 添加对话框 -->
