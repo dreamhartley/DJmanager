@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import quote, unquote, urlsplit
 
@@ -434,7 +435,12 @@ class WebDAVStorage(Storage):
     # ---------- 连接测试 / 目录浏览（供设置页使用）----------
 
     async def test_connection(self) -> None:
-        """验证连通性与 base_path 是否存在；失败抛出 WebDAVError"""
+        """验证连通性、base_path 存在，以及具备读写权限。
+
+        在 base_path（即选择的目录）下创建一个临时文件再删除，创建+删除均成功
+        才视为连接正常；失败抛出 WebDAVError。
+        """
+        # 1. 先用 PROPFIND 校验认证与 base_path 是否存在（便于给出精确错误）
         resp = await self._propfind("", "0")
         if resp.status_code in (401, 403):
             raise WebDAVError("认证失败：用户名或密码错误")
@@ -442,6 +448,20 @@ class WebDAVStorage(Storage):
             raise WebDAVError("指定的目录不存在")
         if resp.status_code not in (200, 207):
             raise WebDAVError(f"连接失败：HTTP {resp.status_code}")
+
+        # 2. 在目标目录下创建临时文件并删除，验证读写权限（完整往返）
+        test_name = f".djmanager_test_{int(time.time() * 1000)}"
+        try:
+            await self._put(test_name, b"djmanager connection test")
+        except WebDAVError as e:
+            raise WebDAVError(f"无法在目标目录写入测试文件（权限不足或路径不可写）：{e}") from e
+        try:
+            del_resp = await self._request("DELETE", self._url(test_name))
+            if del_resp.status_code not in (200, 202, 204):
+                raise WebDAVError(f"测试文件创建成功但删除失败：HTTP {del_resp.status_code}")
+        except WebDAVError as e:
+            # 删除失败说明缺少删除权限，仍视为连接异常
+            raise WebDAVError(f"测试文件创建成功但无法删除（请检查删除权限）：{e}") from e
 
     async def browse(self, rel: str = "") -> list[dict]:
         """浏览 WebDAV 服务根下某目录的子目录（供前端选择作品根目录）。
