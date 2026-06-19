@@ -56,6 +56,8 @@ interface UploadProgress {
   /** 当前文件的分块进度（仅分块上传时有效） */
   chunkIndex?: number
   chunkTotal?: number
+  /** 当前文件已上传字节占比 0~100 */
+  percent?: number
 }
 
 let _cfCheckCache: CfCheckResult | null = null
@@ -110,12 +112,23 @@ async function uploadFileChunked(
         filename: file.name,
         chunkIndex: i + 1,
         chunkTotal: totalChunks,
+        percent: Math.round((i / totalChunks) * 100),
       })
 
       await api.post('/upload/chunk', chunkForm, {
         params: { upload_id: uploadId, chunk_index: i },
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 300000, // 5分钟超时 - 大文件分块可能需要更久
+        onUploadProgress: (e) => {
+          // 当前分块上传进度 → 换算成整个文件的百分比
+          const chunkRatio = e.total ? e.loaded / e.total : 0
+          onProgress?.({
+            filename: file.name,
+            chunkIndex: i + 1,
+            chunkTotal: totalChunks,
+            percent: Math.round(((i + chunkRatio) / totalChunks) * 100),
+          })
+        },
       })
     }
 
@@ -156,7 +169,7 @@ export async function uploadFiles(
         allErrors.push(...result.errors)
       } else {
         // 小文件或非 Cloudflare → 直接上传
-        onProgress?.({ filename: file.name })
+        onProgress?.({ filename: file.name, percent: 0 })
         const formData = new FormData()
         formData.append('files', file)
         const params = targetPath ? { path: targetPath } : {}
@@ -164,6 +177,12 @@ export async function uploadFiles(
           headers: { 'Content-Type': 'multipart/form-data' },
           params,
           timeout: 300000,
+          onUploadProgress: (e) => {
+            onProgress?.({
+              filename: file.name,
+              percent: e.total ? Math.round((e.loaded / e.total) * 100) : 0,
+            })
+          },
         })
         allUploaded.push(...data.files)
         allErrors.push(...data.errors)

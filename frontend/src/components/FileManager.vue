@@ -37,6 +37,8 @@ const selectedFileIds = ref<Set<number>>(new Set())
 const selectedFolderPaths = ref<Set<string>>(new Set())
 const uploading = ref(false)
 const uploadProgress = ref('')
+// 整体上传进度 0~100，用于按钮内的颜色进度条
+const uploadPercent = ref(0)
 
 const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
@@ -167,21 +169,29 @@ function handleFileClick(e: MouseEvent, fileId: number) {
 async function doUpload(filesToUpload: File[]) {
   if (filesToUpload.length === 0) return
   uploading.value = true
+  uploadPercent.value = 0
   const total = filesToUpload.length
   try {
     for (let i = 0; i < total; i++) {
       uploadProgress.value = `(${i + 1}/${total})`
+      uploadPercent.value = Math.round((i / total) * 100)
       await uploadFiles(props.workId, [filesToUpload[i]], currentPath.value || undefined, (p) => {
         // 分块上传时显示详细进度
         if (p.chunkIndex && p.chunkTotal && p.chunkTotal > 1) {
           uploadProgress.value = `(${i + 1}/${total}) 分块 ${p.chunkIndex}/${p.chunkTotal}`
         }
+        // 将当前文件进度换算成整体进度（每个文件占 1/total）
+        const filePercent = p.percent ?? 0
+        uploadPercent.value = Math.round(((i + filePercent / 100) / total) * 100)
       })
+      uploadPercent.value = Math.round(((i + 1) / total) * 100)
       await loadDirectory() // 立即刷新列表显示新上传的文件
     }
+    uploadPercent.value = 100
   } finally {
     uploading.value = false
     uploadProgress.value = ''
+    uploadPercent.value = 0
     emit('refresh')
   }
 }
@@ -421,10 +431,22 @@ function canPreview(file: FileItem) {
               </button>
             </div>
           </div>
-          <!-- 上传按钮 -->
-          <label class="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded transition-colors" :class="uploading ? 'opacity-75 cursor-wait' : 'cursor-pointer'">
-            <Upload class="w-4 h-4" />
-            {{ uploading ? `上传中... ${uploadProgress}` : '上传文件' }}
+          <!-- 上传按钮（上传时按钮内显示颜色进度条） -->
+          <label
+            class="relative flex items-center gap-1 px-3 py-1.5 text-sm rounded transition-colors overflow-hidden min-w-[112px] justify-center"
+            :class="uploading ? 'bg-blue-100 text-blue-700 cursor-wait' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer'"
+          >
+            <!-- 进度填充层 -->
+            <span
+              v-if="uploading"
+              class="absolute inset-y-0 left-0 bg-blue-400/60 transition-[width] duration-200 ease-out pointer-events-none"
+              :style="{ width: uploadPercent + '%' }"
+            ></span>
+            <!-- 文字内容（位于进度条之上） -->
+            <span class="relative z-10 flex items-center gap-1 whitespace-nowrap">
+              <Upload class="w-4 h-4" />
+              {{ uploading ? `上传中 ${uploadPercent}% ${uploadProgress}` : '上传文件' }}
+            </span>
             <input type="file" multiple class="hidden" @change="handleUpload" :disabled="uploading" />
           </label>
         </div>
